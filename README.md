@@ -1,1 +1,1 @@
-# suicide-detection-project
+Mal asd
