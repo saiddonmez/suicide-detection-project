@@ -1,0 +1,7 @@
+torch
+gensim
+pandas
+numpy
+sklearn
+lightgbm
+transformers==3.0.2
