@@ -12,6 +12,8 @@ import torch.utils.data as data_utils
 #         sequence += (max_length-len(sequence))*[0]
 #     return sequence
 
+
+
 def embeddings_from_dataset(X, tokenizer, bert_model):
 
     X = [tokenizer.tokenize('[CLS] ' + sent + ' [SEP]') for sent in X] # Appending [CLS] and [SEP] tokens - this probably can be done in a cleaner way
@@ -49,6 +51,7 @@ def embeddings_from_dataset(X, tokenizer, bert_model):
 def train_model(model,optimizer,criterion,loader):
     model.train()
     total_loss = 0
+    correct_preds = 0
     for data in loader:
         x = data[0]
         label = data[1]
@@ -58,23 +61,30 @@ def train_model(model,optimizer,criterion,loader):
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
+        prediction = np.where(pred>0.5, [1,0])
+        correct_preds += np.sum(prediction == label)
     
-    return total_loss/len(loader.dataset)    
+    return total_loss/len(loader.dataset), correct_preds/len(loader.dataset)    
 
 def test_model(model,criterion,loader):
     model.eval()
     total_loss = 0
+    correct_preds = 0
     for data in loader:
         x = data[0]
         label = data[1]
         pred = model(x)
         loss = criterion(pred,label)
         total_loss += loss.item()
+        prediction = np.where(pred>0.5, [1,0])
+        correct_preds += np.sum(prediction == label)
     
-    return total_loss/len(loader.dataset)
+    return total_loss/len(loader.dataset), correct_preds/len(loader.dataset)
 class BertClassifier(nn.Module):
-    def __init__(self, input_size = 768):
+    def __init__(self, bert_model, tokenizer, input_size = 768):
         super().__init__()
+        self.bert_model = bert_model
+        self.tokenizer = tokenizer
         self.fc1 = nn.Linear(input_size,100)
         self.fc2 = nn.Linear(100,50)
         self.fc3 = nn.Linear(50,1)
@@ -83,8 +93,15 @@ class BertClassifier(nn.Module):
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = torch.sigmoid(self.fc3(x))
-
         return x
+
+    def predict(self,x):
+        embs = embeddings_from_dataset([x],self.tokenizer, self.bert_model(x))
+        y_hat = self.forward(embs)
+        preds = np.where(y_hat>0.5, [1, 0])
+        return preds
+
+        
 
 
 
@@ -122,7 +139,8 @@ optimizer = torch.optim.Adam(my_NN.parameters(),lr=0.01)
 criterion = nn.BCELoss()
 
 for epoch in range(10):
-    loss = train_model(my_NN,optimizer,criterion,train_loader)
-    print(f"Epoch {epoch+1}, train_loss: {loss}")
-    test_loss = test_model(my_NN,criterion,test_loader)
-    print(f"test_loss: {test_loss}")
+    train_loss, train_accuracy = train_model(my_NN,optimizer,criterion,train_loader)
+    print(f"Epoch {epoch+1}, train_loss: {train_loss}, train_accuracy: {train_accuracy}")
+    test_loss, test_accuracy = test_model(my_NN,criterion,test_loader)
+    print(f"test_loss: {test_loss}, test_accuracy: {test_accuracy}")
+    
